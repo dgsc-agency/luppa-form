@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Luppa — Pulse upitnik</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<style>
+:root{
+  --bg:#F5F1EE; --ink:#171738;
+  --c1:#FFF0EB; --c2:#FADCD2; --c3:#FFB397; --c4:#FF9E7A; --c5:#FF885E; --c6:#FF521B;
+  --idle:#E7E7E7; --idle-last:rgba(209,209,208,.5);
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --ease-drawer:cubic-bezier(.32,.72,0,1);
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+/* ---------- header ---------- */
+.hero{
+  position:fixed; top:env(safe-area-inset-top,0px); left:0; right:0;
+  padding-top:47px; text-align:center; z-index:0; pointer-events:none;
+  transition:opacity .2s linear, transform .2s linear;
+}
+.hero img{height:37px}
+.hero h1{font-size:28px; line-height:25px; font-weight:400; margin:56px 0 0}
+/* ---------- cards ---------- */
+.stream{
+  position:relative; z-index:1;
+  max-width:1020px; margin:0 auto;
+  padding:245px 16px 0;
+}
+.card{
+  background:#fff; border:1px solid rgba(0,0,0,.16); border-radius:24px;
+  padding:56px 40px 64px; margin-bottom:12px;
+  min-height:324px;
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+  transition:min-height .42s var(--ease-out);
+}
+.card.answered{min-height:400px}
+/* broj pitanja u krugu: beo krug sa blagom sivom ivicom, 25% veci od visine velikog slova (.727em x 1.25), regular broj (70% opacitet) sa 4px unutrasnjeg padinga, zakacen u gornji levi ugao kartice */
+.card{position:relative}
+.numc{
+  position:absolute; top:18px; left:18px; display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+  width:.909em; height:.909em; padding:0 .17em; border-radius:999px; background:#fff; border:1px solid rgba(0,0,0,.16);
+  transition:width .4s var(--ease-out), border-color .3s var(--ease-out);
+}
+.numc > b{color:rgba(23,23,56,.7); font:400 .4em/1 'Inter',sans-serif; letter-spacing:0; font-variant-numeric:tabular-nums; white-space:nowrap}
+.numc .ck{display:block; width:0; height:.36em; margin-left:0; opacity:0; overflow:hidden; transition:width .4s var(--ease-out), margin-left .4s var(--ease-out), opacity .25s var(--ease-out) .1s}
+.numc .ck svg{display:block; width:.42em; height:100%}
+/* neodgovoreno pitanje posle klika na Next page: crven krug */
+.card.missing:not(.answered) .numc{border-color:#C8371A; background:#FFF1ED}
+.card.missing:not(.answered) .numc > b{color:#C8371A}
+/* odgovoreno: krug se rasiri u pilulicu sa zelenom kvacicom */
+.card.answered .numc{width:1.6em; border-color:rgba(31,138,76,.4)}
+.card.answered .numc .ck{width:.42em; margin-left:.14em; opacity:1}
+.q{
+  font-size:23px; line-height:30px; letter-spacing:-.23px;
+  text-align:center; max-width:648px; margin:0 0 44px;
+}
+.answer-line{
+  height:20px; margin:-24px 0 20px;
+  font-size:13.7px; letter-spacing:-.68px; text-align:center;
+  opacity:0; transform:translateY(4px);
+  transition:opacity .26s var(--ease-out), transform .26s var(--ease-out);
+}
+.card.answered .answer-line{opacity:1; transform:none}
+/* scale row */
+.scale-row{display:flex; align-items:center; gap:14px; width:100%; justify-content:center}
+.edge{font-size:12px; white-space:nowrap; width:92px}
+.edge.right{text-align:left}
+.edge.left{text-align:right}
+.scale{display:flex; gap:2px; touch-action:pan-y; user-select:none; -webkit-user-select:none}
+.scale.dragging .seg{cursor:grabbing}
+.seg{
+  width:105px; height:20px; background:var(--idle);
+  cursor:pointer; position:relative;
+  transition:background .15s ease, transform .14s var(--ease-out);
+}
+.seg:last-child{background:var(--idle-last)}
+.seg:first-child{border-radius:305px 0 0 305px}
+.seg:last-child{border-radius:0 305px 305px 0}
+.seg:active{transform:scaleY(.85)}
+.seg .tip{
+  position:absolute; top:26px; left:50%; transform:translateX(-50%);
+  font-size:12px; letter-spacing:-.6px; white-space:nowrap;
+  opacity:0; transition:opacity .15s ease; pointer-events:none;
+}
+.scale:hover .seg.hovered .tip{opacity:1}
+/* comment */
+.comment{
+  width:100%; max-width:648px; margin-top:40px;
+  opacity:0; transform:translateY(6px) scale(.97); visibility:hidden;
+  transition:opacity .26s var(--ease-out) .08s, transform .26s var(--ease-out) .08s, visibility 0s .34s;
+}
+.card.answered .comment{opacity:1; transform:none; visibility:visible; transition:opacity .26s var(--ease-out) .08s, transform .26s var(--ease-out) .08s}
+.comment textarea{
+  width:100%; min-height:64px; resize:vertical;
+  border:1px solid rgba(0,0,0,.16); border-radius:12px;
+  padding:12px 14px; font:400 14px/1.5 'Inter',sans-serif; color:var(--ink);
+  background:#fff; outline:none;
+}
+.comment textarea:focus{border-color:var(--ink)}
+.comment textarea.saved{border-color:rgba(23,23,56,.4)}
+.comment-note{height:18px; margin-top:6px; font-size:12px; text-align:right; color:rgba(23,23,56,.6); opacity:0; transition:opacity .2s var(--ease-out)}
+.comment-note.on{opacity:1}
+.comment-note.ok{color:#1F8A4C}
+.comment-toggle{display:none}
+.comment-body{display:block}
+/* desktop: donji razmak kartice = gornji (56px); komentar je spusten dok pitanje nije odgovoreno pa se kartica sama prosiri */
+@media (min-width: 641px){
+  .card:not(.qt){min-height:0; padding-bottom:56px}
+  .card:not(.qt).answered{min-height:0}
+  .card:not(.qt){transition:padding-bottom .42s var(--ease-out)}
+  .card:not(.qt).answered{padding-bottom:32px} /* + 24px mesta za poruku ispod polja = 56px */
+  .card:not(.qt) .comment{
+    display:grid; grid-template-rows:0fr; margin-top:0;
+    transition:grid-template-rows .42s var(--ease-out), opacity .26s var(--ease-out) .08s, transform .26s var(--ease-out) .08s, visibility 0s .42s;
+  }
+  .card:not(.qt).answered .comment{
+    grid-template-rows:1fr;
+    transition:grid-template-rows .42s var(--ease-out), opacity .26s var(--ease-out) .08s, transform .26s var(--ease-out) .08s;
+  }
+  .card:not(.qt) .comment-body{min-height:0; overflow:hidden}
+  .card:not(.qt) .comment-inner > textarea{margin-top:40px}
+}
+/* ---------- bottom veil + progress ---------- */
+.veil{
+  position:fixed; left:0; right:0; bottom:0; height:168px; z-index:2;
+  background:linear-gradient(to top, var(--bg) 13.4%, rgba(245,241,238,0) 100%);
+  pointer-events:none; transition:opacity .3s linear;
+}
+.dock{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(37px + env(safe-area-inset-bottom,0px)); z-index:3;
+}
+/* status bar: 3 debele pilule (po jedna za stranu), razmak 2px; spoljni krajevi zaobljeni, unutrasnje ivice ravne */
+.pill{position:relative; width:589px; max-width:calc(100vw - 32px); height:18px; background:transparent}
+.sg-wrap{display:flex; gap:2px; height:100%}
+.sg-seg{position:relative; flex:1; height:100%; border-radius:0; background:rgba(23,23,56,.1); overflow:hidden; display:grid; place-items:center}
+.sg-dots{position:absolute; left:0; right:0; top:0; bottom:0; display:flex; align-items:center; justify-content:space-around; z-index:1; pointer-events:none}
+.sg-dots i{width:4px; height:4px; border-radius:50%; background:rgba(23,23,56,.25); transition:background .25s var(--ease-out), transform .25s var(--ease-out)}
+.sg-dots i.on{background:#171738; transform:scale(.75)}
+.sg-seg:first-child{border-radius:9px 0 0 9px}
+.sg-seg:last-child{border-radius:0 9px 9px 0}
+.sg-seg > i{position:absolute; left:0; top:0; bottom:0; width:0; background-image:linear-gradient(90deg,#FFC8B4,#FF521B); background-repeat:no-repeat; transition:width .42s var(--ease-out)}
+.sg-pct{position:absolute; bottom:calc(100% + 8px); left:0; transform:translateX(-50%); z-index:3; height:24px; padding:0 12px; border-radius:12px; background:#fff; box-shadow:0 2px 8px rgba(23,23,56,.15); font:700 13px/24px 'Inter',sans-serif; color:#171738; white-space:nowrap; transition:left .45s var(--ease-out)}
+/* Back / Next page: odmah ispod poslednje kartice */
+.nav{position:relative; z-index:1; max-width:1020px; margin:0 auto; padding:12px 16px 170px; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:12px}
+/* napomena ispod Next page kad nisu odgovorena sva pitanja */
+.nav-note{flex:0 0 100%; text-align:center; font:500 14px/20px 'Inter',sans-serif; color:#C8371A; opacity:0; transform:translateY(-4px); transition:opacity .25s var(--ease-out), transform .25s var(--ease-out); pointer-events:none}
+.nav-note.on{opacity:1; transform:none}
+.nav button{
+  height:44px; padding:0 36px; border:none; border-radius:24px; cursor:pointer;
+  color:#fff; font:600 15px 'Inter',sans-serif;
+  background:linear-gradient(180deg,#21214D,#171738);
+  box-shadow:0 8px 20px rgba(23,23,56,.25);
+  transition:transform .14s var(--ease-out);
+}
+.nav button:active{transform:scale(.96)}
+.nav button[hidden]{display:none}
+.nav .nb-count{margin-left:10px; padding-left:10px; border-left:1px solid rgba(255,255,255,.35); font-weight:500; opacity:.85; white-space:nowrap}
+.nav button.secondary{
+  background:transparent; color:var(--ink); box-shadow:none; border:1.5px solid var(--ink);
+  padding:0 28px; transition:transform .14s var(--ease-out), background .15s ease;
+}
+.nav button.secondary:hover{background:rgba(23,23,56,.06)}
+/* final card */
+.final{
+  display:none; text-align:center; padding:80px 40px;
+}
+.final h2{font-weight:500; font-size:23px; margin:0}
+
+/* oznaka strane iznad kartica */
+.page-label{text-align:center; font-size:13px; letter-spacing:.02em; text-transform:uppercase; opacity:.55; margin:0 0 14px}
+/* "Strana X od Y": u toku stranice nestaje cim se krene skrolovati, a kad logo i naslov izadju iz vidnog polja vraca se zakacena gore */
+.page-pin{
+  position:fixed; top:calc(12px + env(safe-area-inset-top,0px)); left:50%; z-index:3; pointer-events:none;
+  transform:translate(-50%,-6px); opacity:0;
+  background:#fff; border-radius:72px; padding:0 12px; height:24px; line-height:24px;
+  font-size:12px; letter-spacing:.02em; text-transform:uppercase; color:rgba(23,23,56,.8); white-space:nowrap;
+  box-shadow:0 2px 1px rgba(0,0,0,.09);
+  transition:opacity .25s var(--ease-out), transform .25s var(--ease-out);
+}
+.page-pin.on{opacity:1; transform:translate(-50%,0)}
+
+/* ===== tipovi pitanja iz Figme (Stetoskop_forma, "00 Question types") ===== */
+.card.qt{align-items:stretch; justify-content:flex-start; min-height:0; background:#fff; border-radius:30px; padding:50px 64px}
+.card.qt.answered{min-height:0}
+.qh{display:flex; align-items:flex-start; gap:0}
+.qn{flex:0 0 0; width:0; font:400 23px/30px 'Inter',sans-serif; letter-spacing:-.23px}
+.qtx{flex:1; min-width:0}
+.qt-title{margin:0; font:400 23px/30px 'Inter',sans-serif; letter-spacing:-.23px}
+.qbody{margin:23px 0 0}
+/* radio / checkbox */
+.opts{display:flex; flex-direction:column; gap:14px; padding-left:34px}
+.opt{display:flex; align-items:center; gap:8px; min-height:32px; cursor:pointer; font:400 16px/20px 'Inter',sans-serif; position:relative; -webkit-tap-highlight-color:transparent}
+.opt input{position:absolute; opacity:0; width:24px; height:24px; margin:0; cursor:pointer}
+.opt .ctl{flex:0 0 24px; width:24px; height:24px; border:1px solid rgba(0,0,0,.16); background:#fff; transition:background .15s ease, border-color .15s ease, box-shadow .15s ease}
+.opt .ctl.radio{border-radius:50%; position:relative}
+.opt .ctl.radio::after{content:''; position:absolute; inset:5px; border-radius:50%; background:var(--ink); transform:scale(0); transition:transform .18s var(--ease-out)}
+.opt input:checked + .ctl.radio::after{transform:scale(1)}
+.opt .ctl.check{border-radius:4px; position:relative}
+.opt .ctl.check::after{
+  content:''; position:absolute; left:7px; top:3px; width:6px; height:11px;
+  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg) scale(0); transition:transform .18s var(--ease-out);
+}
+.opt input:checked + .ctl.check{background:var(--ink); border-color:var(--ink)}
+.opt input:checked + .ctl.check::after{transform:rotate(45deg) scale(1)}
+.opt input:focus-visible + .ctl{box-shadow:0 0 0 3px rgba(255,82,27,.35)}
+.opt:active .ctl{transform:scale(.94)}
+/* otvoreni odgovor */
+.open-ta{
+  display:block; width:100%; min-height:120px; resize:vertical; padding:16px 20px;
+  background:#fff; border:1px solid #E3E1E1; border-radius:16px; outline:none; color:var(--ink);
+  font:400 16px/1.8 'Inter',sans-serif; transition:border-color .15s ease;
+}
+.open-ta:focus{border-color:var(--ink)}
+.open-ta::placeholder{color:rgba(23,23,56,.45)}
+/* rangiranje (prevuci i spusti) */
+.rank{list-style:none; margin:0; padding:0; counter-reset:rk; display:flex; flex-direction:column; gap:10px}
+.rk{display:flex; align-items:center; gap:0; height:52px; counter-increment:rk; outline:none; user-select:none; -webkit-user-select:none}
+.rk::before{content:counter(rk)'.'; flex:0 0 30px; font:400 16px/20px 'Inter',sans-serif}
+.rk-box{
+  flex:1; height:50px; display:flex; align-items:center; justify-content:space-between; padding:0 20px 0 16px;
+  background:rgba(23,23,56,.06); border:1px solid transparent; border-radius:6px; cursor:grab;
+  font:400 16px/20px 'Inter',sans-serif; transition:border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.rk:focus-visible .rk-box{border-color:var(--ink)}
+.rk.dragging .rk-box{border-color:var(--ink); cursor:grabbing; box-shadow:0 6px 16px rgba(23,23,56,.12); background:rgba(23,23,56,.09)}
+.rk-grip{flex:0 0 28px; height:36px; margin-right:-8px; display:grid; place-items:center; touch-action:none; opacity:.7}
+.rk-grip svg{display:block}
+/* touch: nema hover tooltipa — odgovor vec pise iznad skale */
+@media (hover:none){ .seg .tip{display:none !important} }
+/* ---------- mobile (po Figma sekciji Screens — Mobile, 2670:2) ---------- */
+@media (max-width: 640px){
+  .hero{padding-top:32px}
+  .hero img{height:27px}
+  .hero h1{font-size:20px; line-height:25px; margin:36px 16px 0}
+  .stream{padding:190px 8px 0}
+  .nav{padding:12px 8px 150px}
+  .card{padding:19px 16px; border-radius:20px; min-height:0; margin-bottom:12px}
+  .card.answered{min-height:0}
+  .q{font-size:16px; line-height:22px; letter-spacing:-.16px; margin-bottom:20px; font-weight:500; text-align:left; width:100%}
+  .answer-line{font-size:15px; font-weight:700; line-height:14px; letter-spacing:-.4px; margin:-8px 0 16px; height:auto}
+  /* skala: segmenti FILL 36px, gap 2, labele Medium 14 (Figma 2670:42) */
+  .scale-row{flex-wrap:wrap; gap:10px 0}
+  .scale{order:1; flex:1 0 100%; gap:2px}
+  .seg{flex:1 1 0; width:auto; height:36px}
+  .seg .tip{display:none}
+  .edge{width:auto; font-size:14px; font-weight:500; padding-top:3px}
+  .edge.left{opacity:.74}
+  .edge.right{opacity:.7}
+  .edge.left{order:2; margin-right:auto; text-align:left}
+  .edge.right{order:3; margin-left:auto; text-align:left}
+  /* komentar kao accordion: zatvoren dok ga ne otvoris */
+  .comment{margin-top:14px; max-width:none; display:none}
+  .card.answered .comment{display:block}
+  .comment-toggle{
+    display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:0 14px;
+    border:1px solid rgba(0,0,0,.16); border-radius:12px; background:#fff; color:var(--ink);
+    font:500 14px 'Inter',sans-serif; text-align:left; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  .comment-toggle .ct-opt{opacity:.55; font-weight:400}
+  .comment-toggle .ct-chev{
+    margin-left:auto; width:8px; height:8px; border-right:2px solid currentColor; border-bottom:2px solid currentColor;
+    transform:translateY(-2px) rotate(45deg); transition:transform .25s var(--ease-out); opacity:.6;
+  }
+  .comment.open .comment-toggle .ct-chev{transform:translateY(2px) rotate(-135deg)}
+  .comment.has .comment-toggle{border-color:rgba(23,23,56,.4)}
+  .comment.has .ct-opt{display:none}
+  /* otvoreno: bez naslova, ostaje samo mala strelica za zatvaranje */
+  .comment.open .comment-toggle{min-height:28px; padding:0; border:0; background:none; justify-content:flex-end}
+  .comment.open .ct-label, .comment.open .ct-opt{display:none}
+  .comment.open .comment-inner > textarea{margin-top:4px}
+  .comment-body{display:grid; grid-template-rows:0fr; transition:grid-template-rows .3s var(--ease-out)}
+  .comment.open .comment-body{grid-template-rows:1fr}
+  .comment-inner{overflow:hidden; min-height:0}
+  .comment-inner > textarea{margin-top:8px; font-size:16px}
+  .pill{height:16px}
+  .sg-seg:first-child{border-radius:8px 0 0 8px}
+  .sg-seg:last-child{border-radius:0 8px 8px 0}
+  .sg-pct{font-size:12px; padding:0 10px; height:22px; line-height:22px}
+  .dock{bottom:calc(28px + env(safe-area-inset-bottom,0px)); width:calc(100vw - 32px)}
+  .nav button{padding:0 20px}
+  #nextBtn{flex:1 1 auto; max-width:240px}
+  #backBtn{flex:0 0 auto}
+  .nav:has(#backBtn[hidden]) #nextBtn{max-width:326px}
+  .final{padding:56px 20px}
+  .card.qt{padding:40px 16px 22px; border-radius:20px}
+  .card:not(.qt){padding-top:40px}
+  .numc{top:12px; left:12px}
+  .qn{font-size:16px; line-height:22px; font-weight:500; letter-spacing:-.16px}
+  .qt-title{font-size:16px; line-height:22px; letter-spacing:-.16px; font-weight:500}
+  .qbody{margin:16px 0 0}
+  .opts{padding-left:0; gap:6px}
+  .opt{min-height:44px; font-size:15px; gap:12px}
+  .rank{gap:8px}
+  .rk{height:50px}
+  .rk-box{font-size:15px; padding:0 8px 0 14px}
+  .rk-grip{flex-basis:44px; height:44px; margin-right:-4px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important}
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){/* prototype stays light by design */}
+}
+</style>
+</head>
+<body>
+
+<div class="hero" id="hero">
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAXUAAABkCAYAAAB5AKBCAAAUe0lEQVR4Ae2dXWwc13XHz51lzKUUMQsXItOyrkeFC8hxAFEooo8UqJZ1Hmz0wRICuH2qaCDoQ+xCVJH2oShqqkBRoDVAMbDTJi+kYuQhCQzSQIIAQRKt/GAp8oPol+QhRjSKQ0cUAWNlw+JS4c7NOTN3peVyv+bOvfOxe34ApSW5nJ07d+Z/zz333HMAGIZhGIZhGIZhGIZhGIZhGIZhGIZhGIZhGCavCMgwn/3sCbfp2+C174uS48hS68+jIqWsCiGq6phVPGbwulBwqvW6H7y+ffuaBwzDMDkicVF33XKpVqudllIcgUCQHwi0G/5H34sSZA+v5X9ErAkh38UXFR4AGIbJAomJOlrdZbSOz+HLckZFOy4VIeASivsyMAzDpIR1USfLfGtr+2W0wOdgKBCraL2fZ8udYZg0sCrq5BNHN8sKCvo0DBfeyIhzZn397TXIMJOTJ25C4PYSaziLWnMcuMIzDYbJN9ZEPRR0uAyaC5n5R1RHRsRMloX9oajvwsN+W963r7joeZUqMAyTKxywxHALOiFLOzvycksETx5wcW1gfmurdoPWQYBhmFxhRdQnJk6gD32YBb2BLOHgtgT5JJhpqb5kGCYnGBd1skzJ0gOmQXli4uRpyCnUl5OTJ4dkkZth8o9xUfd9yK1l57hTwZdphAhCOXOMXGBXDMPkA+MLpR0W33LByOLLIA4+GryWv3gP/Ld+DvKX74Hc/BDighbvzO3b1yqQISL2lTc2VjzKi6cMk21GwCDhBqPB8KWLzz0BBfwiQZdvXYf6Gz+COEgpKKyzAvnFrdVq5IaZB4ZhMotR94uUgxePTpa78+VndlnxWscR8gjkHByYztFmMmAYJrMYFXUhBnL7fwAJeuHf/0lb2AdjwJNB3h5gGCazmF4odWGACYT9n78CsH8MojMwA94pYBgms1jbfDSoiMenoPDM8OoarpmUgWGYzGLYpy4+A0OA8+VnY/nXc44LDMNkFsOWuhyaRTTnr49BRFxgGIaxDLtfNHGeLQPDMEzWYFHXZd9YZBcMhwMynaD0GvQ1SPcItaXRLsgZee4Lo5uPYMhcDOJJ2px0ve/312o1ukl4R6ai3cNeLBartnetqpKKpX4+t5MgxSmCQpv0fB9OCUEb0oJQV0qeFrC1VaOdvvTSoy8h4AqE5RIrYIh27SfiXPuwGM7WLJWpxHMu04+oLQ3CNlEdYLEW5u+HK3fuXF2FlNl93tQfvkuRatQfD/vi4XkLId+M0xedrr3JojpG0wTkOUUAEXWDUf3/vwP+W/2LOt7sh7JUEUm3vzY2rmnfN0rQzuLDcbpdmCdeowt4jebBMPQw3btXO4fHn4U2bcafk3DOtP688zWSVRSCVccJzteDPj6fxAMnx2c1i8Z4qqrWYtx7CPtgGUXrbIdfRyrLqHaRU76nMkQm2jU0CZ73rLoGZYgO1RyoROn7bvceYVIbeKE0QQoFZ2ivD93Yk5MnFyidb3hzJxe3Pzl5/BwK6k2VPdQFI4gStQPbc7NXemLK0kn56fFvFmJUAXOpJCR9HrZnwaJLg0R6iT6j25sOHvzCNA54l1XdhDJosesaLiXhpqG+oIFapcQugx5uv31PbaK+N3vvdcewqCe/wWb8wH44c7oMX3r6GDx52IUsU6/7Qynqqk7t5TTq1IYPnbho896kBxYf3j2WbziQHV9B63oFjD7QgsT9st3MmWKuk7DTIOk4BRykzO1Z6FckdSFxpUHIdF+EqalP3Gw3IKVV/S33C6UHxvfDf//XS/Dq1/8VVt54BX764//D71+EqakJYLKBKjyeeJoEmmInldsf3QgXmxfWGhYaPva20iokUMREzLUOHGRRh4OkpU8MRPL4gslFSppVxJtR9IRqMd9orZug0pC7kDDGRD0rK9xTUwfRcp9Bcf8GvPTi85AxXBgyQlFI3kIvlcol5etNiCAvTtDOJC00EkGbwt58DdF9dkP5hS0j5mhmZ0LYSdAdx0mgL2SJZgGNGZsqFjQLKTDQIY0vffV5WH3jf9lqTxHK7AgpUCwGicdcSBAUwFNpTLktC3u5sR6S7GxLTscV9oeCnpxbmIq2h4vH0tYMrScDH6d++PAh+PbSBRhHNw2TBunc3F2iO2yCgi7JD+1CwtgsO3jvXm0hjdkWCXv42dGhwRX9/itprPOhIUN++9QSRJkUdRcyCrlkyOeeAVwYIg4e/GLifvQmXEge16IPvQ/kwtSU+Wuelhuh8dk6g1UaC5RNn15K8z4Ymh2lx77wFJz9h78FJjkKhVSjfVwYQnZ25BIMHi9HWbNTrqi+3z9oDFWagBfRx85uGGawkdMogPMwUMiSiivviVqgnIchxnSagEwTxLQ/V4ZLr/8QGCYdaMu5c0kIuQZhKoAGLoQbf05BTCtTlR28mFyRcFkVgrb+yzeldDzHkcHn+n6wuaiMv38O4lvOZVqA7LVFn8IIhYF98rTDuF178PU0Xt/n0gjR7Rdjoh52oISs8/TTx1ITdbwZeMft0BII3/licWy1i9gu0z9qC3sMF8KD8Mp5sErQpkVsU7cBZBW/5lQ6AbK2XdBEXZNKp9+ryKNZiIVYHBsbne/RnvkwsmZkKYvibsz9giNYJMEaH5HwWHEHkuZwirtOcdAbiiIizG7I6hsbG6PcHsv9WM/0PvwbykNTAU0SCCX1UNCPUp6ePttU2di4dohy+4A+5W4LwWqzjy6UPG1mY+PqXD/t2dx8Zw3fezRme6yQmk/98/vvwzt/+Tu4/Vfvw0+mN+A//7yKIl8H25ALhuPWmaRQybFmorpCKLkTiuAMWp6XQAtZsphGIBBAnQRUNAjEEcJ63e8YVaKyQ+rQaE8FIqLa8wJkiEwslJLA/+Mff4wi/wEs/sWHiYg7wySAVywWY8V3378f/L0HeliI1SeXi56gNwizcIpF0KDT/gM1gLmgge/Xz8Rsz7Jue2yQueiXv5v4BH565HbwP8PkGRK/uIuV1WqlqmsJogvGQqy0YyRN7vb26Hy4aByZtkU3KJ0zaCEWyZUCMSG3TZhzPX0yGdI4PuIHFvvXHrsLDJNHUIiXTeXHDt0CYhUiI0uGNyOhS+jqRTBAOFjpWut7B6uwwEVk0O0ijbSHwGOdhwyQ6Tj1r/3ZR/DMH20Bw+SNQsExOh2n4higwc6OLIMhTC8K1mrFizrWOl6LI83fU/I2nSgUVRjFA0Mon7wHKZP5zUdff+LDIFKGYXKEt77+ttGpeAzBcMEcFTAIWesUsw8RQb96ufn7YrGmNRsxPfAStDAOKZN5USdXzL+wG4bJEWQBghXEmxAdF4wg12yUnFObsKLiNn8jpU6suKiaHngVFUiZXKQJoEVTttaZvOA4vo749kRPAHe7KvQ/29oiYAU0aF4sxXOLvKlPczDpCbqUUl8sNSbqvi9irfJ3g6z1vx+MaJhbwAw8vu9YeRbqdSe2VasLLk6+CxYIrf/ofvWWer8uRMRWe0KXUrp+dZM7Sq2JOvHF8RowTE7wwAKFgm/1GesGWrYWPzu6Qdhc7xd97I9DdDywhwcpkpssjU99+vfAMHnAhu85znEN1fv0wB4eRMeFGGRtkDJJbkT9MwUfGIaJTq1WMyHqTJ/ggJFqZIcxUUd/n9XRifzqeQf9eKmO4EwyGLKMjWFi5oCLv5lqE55PZp8lTXeQMYyJepr+vrxgd8rHZAVblnGU6j+mwcVfm6LuQkSaF6OF0ApAcGFAGarKRwyTBGhFmtya34wLkTE2O3TBHi5EpFCI5xmwW9sg3RzrxkS9ViuyFdobD5iBp14vuGABvU02vgdmsOJS0C1O/qlPPeI1fetBZMzE77cSpixItxiOMVFX8Zm5YOpPDgKTTQahOlRrbhJzOKcgMo6RvRF2Mj4Gblut3aAt2S89iIyYtrH28cgj22VIGXa/xEAcfBQYs5ioDqVr/ZmCBNDOYqlO0ipTOyftFN0I631Go7VNepuygpJ/Fu4TGbk9pjEt6h4w3fCA6Yqei2E3etafSWTp/v17ZTAI1S0FDd8z+vcNibp5az1c+JWRj9m6G3Rzk3K4RA9CUDVPjUHtwQHHyowmCqlZ6nd3zHz0xx8ZTB/wCaf5NYwHkXHcuFaujvVnGrQejdYI1RUg33eMiTpy1uQMRLemaKFQr+z9qVZumrLJiKKwUEf67kPDot7/Svtvtwtggo8+/gTW1++AEX7zW7BJsciLyb2JNy3Wtf4sUJ6cPDkHBtC10s1nVpSlra3tJTBAaNXCLGjQbqDCY10BDXCwNNgeaaS/42JY1PufApGl/vbdIphgZbUCJqi/dR1sEre0Wd7QFZQ40+KYFeVN83LcykMkFuiSWgAtoucq7408HXewImsf+/gyaNClsEUF9ChPTJyIfc/g7HAlC1Y6kepC6Svvj4MJvv36DwOLPS7yF++B9NaBMYoH0dGycunh1LX+7CBLOzv+iu4UPxR0Ej89sUDLcRWsIBfw3LRqgpKgo7VPgu6CHm0HKlVEpAIa4D0zryvs1B7826W0Y9ObMSrqUXd2vX13FL71uwN9v/+x4k7bn5Ogv/ba96Ffxsf3d/xd/ZvfAUt4MCBMTp64jKK7Mjl5fK63YOnm4ZYLUYRdCfo8ZA8UZnFDuVD6ZmLi5Gm00G+ApviZLtXWCg42y1GFkKJntrZqN/QFUFTRhdlloJLaeezp3sH7eSHKmgHd+zRAZcuQyEBI43/8ugTfvbMf4nLp9R/Aq699r6/3HjjQ+fPkrXWbwj4olEO/tVjAh/smWSqdxd3X8nWGyIXuxw6FggaZjAq6QpK7YQnP8yaJeyfhoJ8/bI+MO523XlYtFMKwTb376PiKcrm4oAnNPLq5MLe3x5Z1omCaPmGOBp1+2kP3Jd37WbLQG4xABjj3q0fh/e2RoMLRY6M7uoeBV7/xPVj/YBNe+urzMDWlv8HIv3I9cMUUzn8FhDvV8X0cpx5ClgrVjURROtr60FHFHBmjaJU69ixa7WTxe+qLQh9LFD6Gv8vTZiVypyyhcJDAV8jyxHYE1wuv0/TW1pZryC/roZW+DMngNhYbG33U3CZ8mtywjwQYoGvha9oAiYK7GDNUsaU9EvsovOfCCkt+mdojjDTHDqZF3QNNXvnNOHzrg0/Ds49uBbnTP79/b/70uzu9I2ZWVi8HX1/6m2Nw7NhTcPiwu+c96+ubPY8jNz+EnX/7HxCfewKcJ58A8fifAuwb2/Ue/1b//ne8CTwYbHAqWkPrEmaaf0i+TrTSqvHFKrCIHlhF4UOV4SerN2VsEzwUBxr5zLRnZMQ5A6kQ9pGNNuExL/TjTqrVihdHR2vk73chNqEVbqM9NsmMqBMf7TihK8ZAhOJPfnY9+IoLWex1/Ip9HCmGoXo2xf2W1aLVA9DCiWs9MX0jFi0VVE4TmnnM9/NGZa2/oBtdMwgY9alr1lAcFiqQOcwXE24n3mQ9xfN1Mn3ijY2NzsOAgZbyTJT3h0aFWIQhxaio627XHQbshZfFIc4iZif2JkoKk705FyBZvHTuRdqAl8bnyiqJn8W9EB6kgjivE8WzsXF1zobR0h/paqDx6BeaagOzC9vhZbrEjxZoR/sdofiQobWe3GyFfLB4e3uQOCSuImGftqz6vj9j8x7D6/kCJCzs1IfqvtH8e0n94EGiiEXsf+3QShMYF3WearfFeniZDmRB2xiEcf2gbZhXUsKgFtWW8aWFmUhvaPqv2poAoaBvbr5j2yr1lBvEgwRQfTgPMaBBLuFzvhTOENLFuKinNNXOLNjRywmGl0VGPTgVMIsL7T/L+kPWLAZoqaVmYFCf4+B2xvLn4/UURxMQ9IBkRDJwI70QV9Ab0DlvbxePkuCCVcQiftYsZAArm4+SnmpnGA96xNZmAbzpaZpaAUN0y4n+UBiM+zuD4zaLQeiOSM/AuHPn6iqJLlgRQbE4NlY8mrRbr9F/NkSS3JR0vUwbQWRokuDamSnSoC3OZ8FCb2BtR6kSCg+GlnDhKou+9Fbopt/YuDYT+qHt9xldE3wIjpp5yILrfEEJXKX1t2RgqHalQtjWa4dMXdtQ+GCGRCStBHHUJpMi2WgTHtPq80KDhdkBSQaDdhy/vw2sRtJTvb7R0WBDShmGCy8vgt6K2h5dllI+F+6gi76JA90Oa3ij97VYSJEyuLB6Gv/mXJQt12oz16VisXixH3ELk2OJOSo1RyXz8P9SP+dM2+Ah2jUIRLzTOUBwbfXaWig4qyZi0PE80DUEkRJy4Tkc6nQ/q7w2Z2lXMfRNsKBMEWGX2g3Gtmn0BWicN2W/pGi2TueNx56Pui+j2/WNSiLbo3QamV9oWjw6P2xpdk1AD5rvi2nHCQSPCh27Tb/2aAOXKmWWWDSRSVFvprmtOIAeUQMopT8gsaN75xaEVrDxtpoW9QY0QN+7t13u1X/1en0tqXWAfuh23o3+wP/fpZQX/Q5ANNA1GUbQOCZeAzze3nUWNE7OmNKMxPa8qpGRxJ2K57owUAQdTzfphTSsDsYetkQ9TWyJOpMNEkvopW6IWXpNW8mpFiUKYaPqutv01uA1JWxKP+n8A6vpwQjbZEkRt9DaWtu3r1hhy5xhmCyQSpbGqAntld+1hNO2UqFQeCD0KKglnDLtEf4wg9+e6ewe8O+r+PeN33lN5+cBwzBMDslE6t1eKCuYLWGGYZgepF4kg2EYhjEHizrDGGRQ8+YXi0WeKecEFnWGMYsHg4fHgQD5gUWdYcySShIxm9COT2ByQy4WShkmH1C1+9FVGDwymWWUaQ9b6gxjiF7V7nOKxxvq8gWLOsOYwYMcZOSMSnJ54RlTsKgzjAH6rXafJ1SbKsDkChZ1holJU6WlgYHS05oqVMEkCy+UMkwsqDBytvJpx0UJ+iwwuYQtdYbRQqypYhUDJOhhFR8W9HzDljrDREDFbKMle3UZBoSHBUfGLvImo/zDos4wXZGLwb/S8fbtGx2IFMu+L1YdR3pgqQgHwzAMwzAMwzAMwzAMwzAMwzAMwzAMwzAMwzCMHn8AtX4hxzcEeUkAAAAASUVORK5CYII=" alt="luppa">
+  <h1 id="heroTitle">Zdravo 🖐️ Daniel, hajde da počnemo.</h1>
+</div>
+
+<main class="stream" id="stream"></main>
+
+<div class="nav" id="nav"><button id="backBtn" class="secondary" type="button" hidden>Nazad</button><button id="nextBtn" type="button">Sledeća strana</button><div class="nav-note" id="navNote" role="alert" aria-live="polite">Ovo pitanje je obavezno</div></div>
+
+<div class="page-pin" id="pagePin"></div>
+
+<div class="veil" id="veil"></div>
+
+<div class="dock" id="dock">
+  <div class="pill" id="pill"></div>
+</div>
+
+<script>
+$(function(){
+  /* Figma Stetoskop_forma 2693:1363 — #DCDCFB + #171738 na 0/10/30/50/70/100% */
+  var COLORS = ['#DCDCFB','#C8C8E8','#A1A1C1','#7A7A9A','#525273','#171738'];
+  var LABELS = [
+    'U potpunosti se ne slažem','Uglavnom se ne slažem','Delimično se ne slažem',
+    'Delimično se slažem','Uglavnom se slažem','U potpunosti se slažem'
+  ];
+  var QUESTIONS = [
+    'Zadovoljan/na sam uslovima rada (platom, finansijskim i nefinansijskim benefitima i opremom za rad).',
+    'Imam dovoljno slobode u načinu na koji obavljam svoj posao.',
+    'Moj menadžer mi daje korisne povratne informacije o mom radu.',
+    'Komunikacija unutar mog tima je otvorena i pravovremena.',
+    'Vidim mogućnost za lični i profesionalni razvoj u ovoj kompaniji.',
+    'Imam jasna očekivanja u vezi sa svojim radnim zadacima.',
+    'Moj rad je prepoznat i cenjen.',
+    'Imam resurse i alate potrebne da kvalitetno obavim posao.',
+    'Opterećenje poslom mi je uglavnom podnošljivo.',
+    'Mogu da uskladim poslovne i privatne obaveze.',
+    'Verujem odlukama rukovodstva kompanije.',
+    'Razumem kako moj rad doprinosi ciljevima kompanije.',
+    'Osećam se slobodno da iznesem svoje mišljenje i ideje.',
+    'Ponosan/na sam što radim u ovoj kompaniji.',
+    'Preporučio/la bih ovu kompaniju kao dobro mesto za rad.',
+    'Članovi mog tima pomažu jedni drugima kada je to potrebno.',
+    'Saradnja sa drugim timovima u kompaniji je efikasna.',
+    'U mom timu se konflikti rešavaju otvoreno i konstruktivno.',
+    'Osećam da pripadam svom timu.',
+    'Moj tim ima jasne zajedničke ciljeve.',
+    'Moj menadžer je dostupan kada mi je potrebna podrška.',
+    'Moj menadžer se fer odnosi prema svim članovima tima.',
+    'Moj menadžer me podstiče da preuzmem inicijativu.',
+    'Sa svojim menadžerom redovno razgovaram o svom razvoju.',
+    'Imam poverenja u svog neposrednog menadžera.',
+    'Imam priliku da učim nove veštine na poslu.',
+    'Kompanija ulaže u moju edukaciju i usavršavanje.',
+    'Jasno mi je kako mogu da napredujem u karijeri ovde.',
+    'Moj posao mi pruža dovoljno izazova.',
+    'Dobijam priliku da radim na zanimljivim projektima.',
+    'Kompanija brine o zdravlju i dobrobiti zaposlenih.',
+    'Retko osećam stres koji utiče na moj privatni život.',
+    'Imam dovoljno vremena za odmor i oporavak.',
+    'Moje radno okruženje je prijatno i bezbedno.',
+    'Fleksibilnost u radnom vremenu mi odgovara.',
+    'Pravovremeno dobijam informacije važne za moj posao.',
+    'Rukovodstvo otvoreno komunicira o planovima kompanije.',
+    'Razumem strategiju i pravac razvoja kompanije.',
+    'Znam kome da se obratim kada imam problem.',
+    'Moje povratne informacije se uzimaju u obzir.',
+    'Vrednosti kompanije se vide u svakodnevnom radu.',
+    'U kompaniji se poštuju različitosti.',
+    'Greške se tretiraju kao prilika za učenje.',
+    'Uspesi se u kompaniji zajednički slave.',
+    'Kompanija se ponaša odgovorno prema zajednici i okruženju.',
+    'Radujem se odlasku na posao većinu dana.',
+    'Spreman/na sam da uložim dodatni trud kada je potrebno.',
+    'Vidim sebe u ovoj kompaniji i za dve godine.',
+    'Moj posao mi daje osećaj smisla.',
+    'Sveukupno, zadovoljan/na sam svojim poslom.'
+  ];
+  var PER = 5, PAGES = 3, page = 0;
+  var finished = false;   // posle 'Zavrsi' odgovori se zakljucavaju
+  var MANDATORY = [0];   // redni brojevi (od 0) obaveznih pitanja; sva ostala su opciona
+  // naslov: na prvoj strani pozdrav, na ostalim motivaciona poruka (isti font)
+  var PAGE_MSGS = [
+    'Zdravo 🖐️ Daniel, hajde da počnemo.',
+    'Odlično ti ide, još samo jedna strana!',
+    'Poslednja strana, hvala na izdvojenom vremenu!'
+  ];
+
+  var $stream = $('#stream');
+  function renderPage(){
+    var lbl = 'Strana '+(page+1)+' od '+PAGES;
+    $stream.empty().append('<div class="page-label">'+lbl+'</div>');
+    $('#pagePin').text(lbl);
+    $('#navNote').removeClass('on');
+    $('#heroTitle').stop(true).css('opacity',0).text(PAGE_MSGS[page]).animate({opacity:1}, 350);
+    QUESTIONS.slice(page*PER, page*PER+PER).forEach(function(q,j){ appendCard(q, page*PER+j); });
+    $stream.append('<section class="card final" id="finalCard"><h2>Hvala! Upitnik je završen 🎉</h2></section>');
+    $('.card').not('.final').each(function(i){
+      var el = this;
+      setTimeout(function(){
+        $(el).css({transition:'opacity .3s var(--ease-out), transform .3s var(--ease-out), min-height .42s var(--ease-out)', opacity:1, transform:'none'});
+      }, 60 + i*50);
+    });
+    $('#nextBtn').html((page < PAGES-1 ? 'Sledeća strana' : 'Završi')+'<span class="nb-count">'+(page+1)+' / '+PAGES+'</span>');
+    $('#backBtn').prop('hidden', page === 0);
+    onScroll();
+  }
+  // ---------- posebni tipovi pitanja (Figma: 00 Question types) ----------
+  var SPECIAL = {
+    5:{type:'radio', text:'Šta vam je najvažnije u svakodnevnom radu?',
+       options:['Dobar tim i atmosfera','Plata i benefiti','Mogućnost napredovanja','Fleksibilnost radnog vremena','Zanimljiv i izazovan posao','Drugo']},
+    6:{type:'check', text:'Koje od ovih benefita biste voleli da vam kompanija ponudi?',
+       options:['Dodatno zdravstveno osiguranje','Edukacija i kursevi','Rad od kuće','Sport i rekreacija','Dodatni slobodni dani','Mentorstvo']},
+    7:{type:'open', text:'Šta biste promenili u svom radnom okruženju?'},
+    8:{type:'rank', text:'Poređajte po važnosti sledeće kategorije, pri čemu je 1 najvažnija:',
+       items:['Inovacije i promena','Komunikacija','Plata i benefiti','Timski duh','Razvoj karijere']}
+  };
+  var esc = function(t){ return $('<div>').text(t).html(); };
+  var CHECK = '<i class="ck" aria-hidden="true"><svg viewBox="0 0 12 10" fill="none" stroke="#1F8A4C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.2 4.6 8.2 10.5 1.8"/></svg></i>';
+  function numHtml(i){ return '<span class="numc"><b>'+('0'+(i+1)).slice(-2)+'</b>'+CHECK+'</span>'; }
+  var GRIP = '<svg width="12" height="18" viewBox="0 0 12 18" fill="none" stroke="#171738" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 1.5l3 3M3 13.5l3 3 3-3M2 7.5h8M2 10.5h8"/></svg>';
+  function appendSpecial(sp, i){
+    var head = '<div class="qh"><span class="qn">'+numHtml(i)+'</span><div class="qtx"><p class="qt-title">'+esc(sp.text)+'</p></div></div>', body = '';
+    if(sp.type === 'radio' || sp.type === 'check'){
+      body = '<div class="opts" role="'+(sp.type==='radio' ? 'radiogroup' : 'group')+'">'+sp.options.map(function(o,k){
+        return '<label class="opt"><input type="'+(sp.type==='radio' ? 'radio' : 'checkbox')+'" name="q'+i+'" value="'+k+'"><span class="ctl '+(sp.type==='radio' ? 'radio' : 'check')+'"></span><span>'+esc(o)+'</span></label>';
+      }).join('')+'</div>';
+    } else if(sp.type === 'open'){
+      body = '<textarea class="open-ta" rows="3" placeholder="Upišite odgovor…"></textarea>';
+    } else if(sp.type === 'rank'){
+      body = '<ol class="rank">'+sp.items.map(function(t){
+        return '<li class="rk" tabindex="0" aria-label="'+esc(t)+', strelicama gore i dole menjate redosled"><span class="rk-box"><span class="rk-t">'+esc(t)+'</span><span class="rk-grip" aria-hidden="true">'+GRIP+'</span></span></li>';
+      }).join('')+'</ol>';
+    }
+    $stream.append('<section class="card qt qt-'+sp.type+'" data-i="'+i+'" style="opacity:0;transform:translateY(14px)">'+head+'<div class="qbody">'+body+'</div></section>');
+    var a = answers[i];
+    if(a !== undefined){
+      var $c = $stream.children().last().addClass('answered');
+      if(sp.type === 'radio') $c.find('input').eq(a).prop('checked', true);
+      else if(sp.type === 'check') a.forEach(function(k){ $c.find('input').eq(k).prop('checked', true); });
+      else if(sp.type === 'open') $c.find('textarea').val(a);
+      else if(sp.type === 'rank'){
+        var $ol = $c.find('.rank');
+        a.forEach(function(t){ $ol.append($ol.children().filter(function(){ return $(this).find('.rk-t').text() === t; })); });
+      }
+    }
+  }
+  function setAnswer(i, val, $card){
+    if(finished) return;
+    var isNew = answers[i] === undefined;
+    if(val === undefined){ delete answers[i]; $card.removeClass('answered'); updateProgress(false); return; }
+    answers[i] = val; $card.addClass('answered');
+    if(isNew) updateProgress(true);
+  }
+  function appendCard(q,i){
+    if(SPECIAL[i]) return appendSpecial(SPECIAL[i], i);
+    var segs = COLORS.map(function(_,k){
+      return '<div class="seg" data-v="'+k+'"><span class="tip">'+LABELS[k]+'</span></div>';
+    }).join('');
+    $stream.append(
+      '<section class="card" data-i="'+i+'" style="opacity:0;transform:translateY(14px)">'+
+        '<p class="q">'+numHtml(i)+q+'</p>'+
+        '<div class="answer-line"></div>'+
+        '<div class="scale-row">'+
+          '<span class="edge left">Ne slažem se</span>'+
+          '<div class="scale">'+segs+'</div>'+
+          '<span class="edge right">Slažem se</span>'+
+        '</div>'+
+        '<div class="comment">'+
+          '<button type="button" class="comment-toggle" aria-expanded="false"><span class="ct-label">Dodaj komentar</span><span class="ct-opt">(opciono)</span><span class="ct-chev"></span></button>'+
+          '<div class="comment-body"><div class="comment-inner">'+
+            '<textarea placeholder="Komentar (opciono) — Enter za čuvanje, Shift+Enter za novi red"></textarea>'+
+            '<div class="comment-note"></div>'+
+          '</div></div>'+
+        '</div>'+
+      '</section>'
+    );
+    if(answers[i] !== undefined){
+      var $c = $stream.children().last();
+      paint($c.find('.scale'), answers[i]);
+      $c.addClass('answered').find('.answer-line').text('Odgovor: '+LABELS[answers[i]]);
+    }
+    if(comments[i] !== undefined){
+      var $cm = $stream.children().last();
+      $cm.find('textarea').val(comments[i]).addClass('saved');
+      markComment($cm.find('.comment'), true);
+    }
+  }
+
+  // komentar: Enter ga cuva (Shift+Enter je novi red); ostaje zabelezen i kad se promeni strana
+  var comments = {}, noteTimer;
+  function noteFor($ta, text, ok, keep){
+    var $n = $ta.siblings('.comment-note');
+    clearTimeout(noteTimer);
+    $n.text(text).toggleClass('ok', !!ok).addClass('on');
+    if(!keep) noteTimer = setTimeout(function(){ $n.removeClass('on'); }, 2000);
+  }
+  function markComment($c, has){
+    $c.toggleClass('has', has);
+    $c.find('.ct-label').text(has ? 'Komentar sačuvan ✓' : 'Dodaj komentar');
+  }
+  function saveComment($ta){
+    if(finished) return;
+    var $c = $ta.closest('.comment'), i = +$ta.closest('.card').data('i'), v = $.trim($ta.val());
+    if(v){ comments[i] = v; $ta.val(v).addClass('saved'); noteFor($ta, 'Komentar sačuvan ✓', true); }
+    else { delete comments[i]; $ta.val('').removeClass('saved'); noteFor($ta, 'Komentar obrisan'); }
+    markComment($c, !!v);
+    $ta.blur();
+  }
+  $stream.on('keydown','.comment textarea',function(e){
+    if(e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    e.preventDefault();
+    saveComment($(this));
+  });
+  // bez dugmeta: komentar se cuva i kad se klikne/dodirne van polja
+  $stream.on('blur','.comment textarea',function(){
+    var $ta = $(this), i = +$ta.closest('.card').data('i');
+    if($.trim($ta.val()) !== (comments[i] || '')) saveComment($ta);
+  });
+  $stream.on('click','.comment-toggle',function(){
+    var $c = $(this).closest('.comment'), open = !$c.hasClass('open');
+    $c.toggleClass('open', open);
+    $(this).attr('aria-expanded', open);
+    if(open) setTimeout(function(){ $c.find('textarea').focus(); }, 280);
+  });
+  $stream.on('input','.comment textarea',function(){
+    var $ta = $(this), i = +$ta.closest('.card').data('i');
+    $ta.removeClass('saved');
+    if($.trim($ta.val()) !== (comments[i] || '')) noteFor($ta, 'Pritisni Enter da sačuvaš', false, true);
+    else $ta.siblings('.comment-note').removeClass('on');
+  });
+
+  var answers = {};
+
+  function paint($scale, upTo, stagger){ // upTo: -1 clears; stagger: kockice se pale redom
+    $scale.find('.seg').each(function(k){
+      var bg = k <= upTo ? COLORS[k] : (k===5 ? 'var(--idle-last)' : 'var(--idle)');
+      $(this).css({'transition-delay': stagger && k <= upTo ? (k*35)+'ms' : '0ms', background: bg});
+    });
+  }
+
+  // hover
+  $stream.on('mouseenter','.seg',function(){
+    var $s = $(this), $scale = $s.closest('.scale'), i = +$s.closest('.card').data('i');
+    $scale.find('.seg').removeClass('hovered');
+    $s.addClass('hovered');
+    paint($scale, +$s.data('v'));
+  });
+  $stream.on('mouseleave','.scale',function(){
+    var $scale = $(this), i = +$scale.closest('.card').data('i');
+    $scale.find('.seg').removeClass('hovered');
+    paint($scale, answers[i] !== undefined ? answers[i] : -1);
+  });
+
+  // ---- handleri posebnih tipova ----
+  $stream.on('change','.qt-radio input', function(){
+    var $c = $(this).closest('.card'); setAnswer(+$c.data('i'), +this.value, $c);
+  });
+  $stream.on('change','.qt-check input', function(){
+    var $c = $(this).closest('.card'), v = $c.find('input:checked').map(function(){ return +this.value; }).get();
+    setAnswer(+$c.data('i'), v.length ? v : undefined, $c);
+  });
+  $stream.on('input','.open-ta', function(){
+    var $c = $(this).closest('.card'), v = $.trim(this.value);
+    setAnswer(+$c.data('i'), v ? v : undefined, $c);
+  });
+  // rangiranje: prevlacenje (misem ili prstom za ikonicu) i strelice na tastaturi
+  var rk = null;
+  function rkOrder($ol){ return $ol.children().map(function(){ return $(this).find('.rk-t').text(); }).get(); }
+  function rkSave($li){ var $c = $li.closest('.card'); setAnswer(+$c.data('i'), rkOrder($li.parent()), $c); }
+  $stream.on('pointerdown','.rk', function(e){
+    if(e.pointerType === 'touch' && !$(e.target).closest('.rk-grip').length) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    rk = {$li:$(this), $ol:$(this).parent()};
+    rk.$li.addClass('dragging'); rkSave(rk.$li);
+  });
+  $(document).on('pointermove', function(e){
+    if(!rk) return;
+    var placed = false, before = rkOrder(rk.$ol).join('|');
+    rk.$ol.children().not(rk.$li).each(function(){
+      var r = this.getBoundingClientRect();
+      if(e.clientY < r.top + r.height/2){ rk.$li.insertBefore(this); placed = true; return false; }
+    });
+    if(!placed) rk.$ol.append(rk.$li);
+    if(rkOrder(rk.$ol).join('|') !== before) rkSave(rk.$li);
+  });
+  $(document).on('pointerup pointercancel', function(){ if(rk){ rk.$li.removeClass('dragging'); rk = null; } });
+  $stream.on('keydown','.rk', function(e){
+    var $li = $(this);
+    if(e.key === 'ArrowUp' && $li.prev().length){ e.preventDefault(); $li.insertBefore($li.prev()); }
+    else if(e.key === 'ArrowDown' && $li.next().length){ e.preventDefault(); $li.insertAfter($li.next()); }
+    else return;
+    $li.focus(); rkSave($li);
+  });
+
+  // klik + prevlacenje (swipe) preko kockica, kao na Swiperu
+  function choose($card, v, stagger){
+    if(finished) return;
+    var i = +$card.data('i'), isNew = answers[i] === undefined;
+    if(answers[i] === v) return;
+    answers[i] = v;
+    paint($card.find('.scale'), v, stagger);
+    $card.find('.seg').removeClass('hovered');
+    $card.addClass('answered').find('.answer-line').text('Odgovor: '+LABELS[v]);
+    if(isNew){
+      // na mobilnom komentar odmah izlazi otvoren (kao na desktopu), a strelica ga moze zatvoriti
+      $card.find('.comment').addClass('open').find('.comment-toggle').attr('aria-expanded','true');
+      updateProgress(true);
+    }
+  }
+  var drag = null;
+  $stream.on('pointerdown','.seg',function(e){
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    var $card = $(this).closest('.card');
+    drag = {$card:$card, $scale:$card.find('.scale'), moved:false};
+    drag.$scale.addClass('dragging');
+    choose($card, +$(this).data('v'), true);
+  });
+  $(document).on('pointermove',function(e){
+    if(!drag) return;
+    var el = document.elementFromPoint(e.clientX, e.clientY), $seg = $(el).closest('.seg');
+    if(!$seg.length || !$.contains(drag.$scale[0], $seg[0])) return;
+    drag.moved = true;
+    choose(drag.$card, +$seg.data('v'), false);
+  });
+  $(document).on('pointerup pointercancel',function(){
+    if(!drag) return;
+    drag.$scale.removeClass('dragging');
+    drag = null;
+  });
+
+  // ---------- progress ----------
+  var total = PAGES * PER, msgTimer, bubbleText = '0%';
+  function count(){ return Object.keys(answers).length; }
+  function missingMandatory(){
+    return MANDATORY.filter(function(i){ return i >= page*PER && i < page*PER+PER && answers[i] === undefined; });
+  }
+  function pageCount(k){
+    var c = 0;
+    for(var i=k*PER;i<k*PER+PER;i++) if(answers[i] !== undefined) c++;
+    return c;
+  }
+  function pct(n){ return Math.round(n/total*100)+'%'; }
+  function setBubble(text){ bubbleText = text; $('#bubble').text(text); }
+
+  // progress celog upitnika: po jedan deo trake za svaku stranu
+  var $pill = $('#pill'), bar = {};
+  function buildBar(){
+    $pill.empty();
+    bar = {segEls:[], fills:[]};
+    var $w = $('<div class="sg-wrap">').appendTo($pill);
+    bar.sdots = [];
+    for(var k=0;k<PAGES;k++){ var $s = $('<div class="sg-seg"><i></i></div>').appendTo($w); bar.segEls.push($s); bar.fills.push($s.find('i'));
+      var $dd = $('<div class="sg-dots">').appendTo($s); for(var j=0;j<PER;j++) bar.sdots.push($('<i>').appendTo($dd)); }
+    bar.text = $('<span class="sg-pct" id="bubble">').text(bubbleText).appendTo($pill);
+  }
+  function renderBar(){
+    var pw = $pill.width();   // gradijent je JEDAN preko cele trake: fiksna sirina + offset po segmentu
+    bar.fills.forEach(function($f,k){
+      $f.css({width: (pageCount(k)/PER*100)+'%',
+              backgroundSize: pw+'px 100%',
+              backgroundPosition: -bar.segEls[k][0].offsetLeft+'px 0'});
+    });
+    bar.sdots.forEach(function($d,i){ $d.toggleClass('on', answers[i] !== undefined); });
+    var $cur = bar.segEls[page][0]; bar.text.css('left', ($cur.offsetLeft + $cur.offsetWidth/2)+'px');   // oznaka iznad trenutne strane
+  }
+  $(window).on('resize', function(){ renderBar(); });
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ renderBar(); });
+
+  function updateProgress(announce){
+    if(!missingMandatory().length) $('#navNote').removeClass('on');
+    var n = count();
+    renderBar();
+    setBubble(pct(n));
+    var msg = !announce ? null : n === total ? 'Gotovo 🎉' : n % PER === 0 ? (n/PER)+'/'+PAGES+' gotova ✓' : n === 2 ? 'Odlično!' : null;
+    if(msg){
+      clearTimeout(msgTimer);
+      setBubble(msg);
+      msgTimer = setTimeout(function(){ setBubble(pct(count())); }, 2200);
+    }
+  }
+  buildBar();
+  renderPage();
+  updateProgress(false);
+
+
+  // ---------- scroll: header fade + dock swap ----------
+  function onScroll(){
+    var y = $(window).scrollTop();
+    var t = Math.min(1, y/160);
+    $('#hero').css({opacity: 1 - t*0.88, transform:'translateY('+(-t*14)+'px)'});
+
+
+    // "Strana X od Y": u flow-u nestaje cim se krene skrolovati; zakacena se vraca kad logo i naslov izadju iz vidnog polja
+    $('.page-label').css('opacity', .55 * (1 - Math.min(1, y/50)));
+    var $lbl = $('.page-label');
+    if($lbl.length){
+      var firstCardTop = $lbl.offset().top + $lbl.outerHeight(true),
+          heroTop = parseFloat($('#hero').css('padding-top')) || 0;
+      $('#pagePin').toggleClass('on', y > firstCardTop - heroTop);
+    }
+  }
+  $(window).on('scroll resize', onScroll); onScroll();
+
+  // ---------- kraj upitnika: zakljucavanje odgovora + konfete u bojama Luppe ----------
+  function finishQuestionnaire(){
+    if(finished) return;
+    finished = true;
+    $('#stream').attr('inert', '');            // nista se vise ne moze kliknuti ni izmeniti
+    $('#nav').css('visibility','hidden').attr('inert','');   // dugmad nestaju, a prostor ispod ostaje
+    $('#finalCard').show();
+    $('html,body').animate({scrollTop: $('#finalCard').offset().top - 120}, 420);
+    launchConfetti();
+  }
+  function launchConfetti(){
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var COLORS = ['#FF521B','#FF885E','#FFB397','#FFC8B4','#171738','#21214D','#DCDCFB'];
+    var cv = document.createElement('canvas'), dpr = window.devicePixelRatio || 1, ctx = cv.getContext('2d'), W, H;
+    cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:100';
+    function size(){ W = innerWidth; H = innerHeight; cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
+    size(); document.body.appendChild(cv);
+    var parts = [];
+    function burst(x, dir, n){
+      for(var k=0;k<n;k++){
+        var a = (-Math.PI/2) + dir*(Math.random()*0.9 + 0.1), v = 11 + Math.random()*11;
+        parts.push({x:x, y:H*0.92, vx:Math.cos(a)*v, vy:Math.sin(a)*v, w:6+Math.random()*7, h:4+Math.random()*6,
+          r:Math.random()*6.28, vr:(Math.random()-.5)*.4, c:COLORS[(Math.random()*COLORS.length)|0], round:Math.random()<.3, t:0});
+      }
+    }
+    burst(W*0.12, 1, 110); burst(W*0.88, -1, 110);
+    setTimeout(function(){ burst(W*0.3, 1, 60); burst(W*0.7, -1, 60); }, 350);
+    var start = performance.now(), DUR = 4200;
+    (function frame(now){
+      var el = now - start; ctx.clearRect(0,0,W,H);
+      parts.forEach(function(q){
+        q.vy += 0.32; q.vx *= 0.992; q.vy *= 0.992; q.x += q.vx; q.y += q.vy; q.r += q.vr; q.t++;
+        var fade = el > DUR-1000 ? Math.max(0, (DUR-el)/1000) : 1;
+        ctx.save(); ctx.globalAlpha = fade; ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.c;
+        if(q.round){ ctx.beginPath(); ctx.arc(0,0,q.w/2,0,6.28); ctx.fill(); } else ctx.fillRect(-q.w/2,-q.h/2,q.w,q.h);
+        ctx.restore();
+      });
+      if(el < DUR) requestAnimationFrame(frame); else cv.remove();
+    })(start);
+    window.addEventListener('resize', size);
+  }
+
+  // Back: na prethodnu stranu (odgovori i komentari ostaju)
+  $('#backBtn').on('click', function(){
+    if(page === 0) return;
+    page--;
+    renderPage();
+    window.scrollTo(0,0);
+    renderBar();
+  });
+
+  // Next page
+  $('#nextBtn').on('click', function(){
+    var miss = missingMandatory();
+    if(miss.length){
+      // obavezno pitanje nije odgovoreno: ostaje na strani, ispod dugmeta pise napomena i skrola na to pitanje
+      $('#navNote').text(miss.length === 1 ? 'Pitanje '+('0'+(miss[0]+1)).slice(-2)+' je obavezno' : 'Označena pitanja su obavezna').addClass('on');
+      var $missing = $('.card').not('.final').filter(function(){ return miss.indexOf(+$(this).data('i')) > -1; }).addClass('missing');
+      $('html,body').animate({scrollTop: $missing.first().offset().top - 90}, 420);
+    } else if(page < PAGES-1){
+      page++;
+      renderPage();
+      window.scrollTo(0,0);
+      renderBar();
+    } else {
+      finishQuestionnaire();
+    }
+  });
+});
+</script>
+</body>
+</html>
