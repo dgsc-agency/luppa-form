@@ -8,6 +8,10 @@
 
 - The server is managed through Laravel Forge.
 
+## Tests are the specification
+
+The test suite is the specification for this system. Once an implementation approach is agreed, and before writing any code, present the list of tests that will be written and get sign-off. Name each test as a behaviour statement and group the tests by feature or module. If the list changes during implementation, show the updated list.
+
 ## Agent skills
 
 ### Issue tracker
